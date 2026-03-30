@@ -1,4 +1,4 @@
-# ERC-8210: Agent Assurance Protocol — Reference Implementation
+# ERC-8210: Agent Assurance Protocol : Reference Implementation
 
 A minimal Solidity reference implementation of [ERC-8210](https://github.com/ethereum/ERCs/pull/1632) (Agent Assurance Protocol), a programmable fulfillment assurance primitive for autonomous agent commerce built on ERC-8183.
 
@@ -12,7 +12,7 @@ ERC-8210 introduces three core primitives:
 | **JobAssurance** | Commitment allocation against a specific ERC-8183 Job |
 | **Claim** | Payout request filed by the Beneficiary when coverage conditions are met |
 
-AAP is a **self-funded collateral model** — each Assured Agent locks its own capital as a fulfillment guarantee. Payouts come from the agent's own AssuranceAccount, not from pooled liquidity.
+AAP is a **self-funded collateral model** where each Assured Agent locks its own capital as a fulfillment guarantee. Payouts come from the agent's own AssuranceAccount, not from pooled liquidity.
 
 ## Architecture
 
