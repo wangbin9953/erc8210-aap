@@ -34,6 +34,12 @@ contract AAPCore is IAAP {
     // Evidence hash storage: claimId => keccak256(evidence)
     mapping(bytes32 => bytes32) public evidenceHashes;
 
+    // Resolution reason hash storage: claimId => keccak256(reason)
+    // Stores the hash of the reason payload (e.g. IPFS CID or on-chain bytes)
+    // passed to resolveClaim, so off-chain indexers can verify integrity of
+    // the resolution rationale referenced in ClaimResolved events.
+    mapping(bytes32 => bytes32) public resolutionReasonHashes;
+
     // ─────────────────────────────────────────────────────────────────
     // Constructor
     // ─────────────────────────────────────────────────────────────────
@@ -288,7 +294,7 @@ contract AAPCore is IAAP {
         bytes32 claimId,
         bool approved,
         uint256 approvedAmount,
-        bytes calldata /*reason*/
+        bytes calldata reason
     ) external override onlyResolver {
         Claim storage claim = _claims[claimId];
         require(claim.state == ClaimState.Filed, "AAP: claim not in Filed state");
@@ -300,6 +306,9 @@ contract AAPCore is IAAP {
             address evaluator = erc8183.getJobEvaluator(ja.coveredJob);
             require(msg.sender != evaluator, "AAP: resolver is the job evaluator (recusal)");
         }
+
+        // Store hash of reason payload for off-chain auditability
+        resolutionReasonHashes[claimId] = keccak256(reason);
 
         claim.resolvedAt = uint64(block.timestamp);
 
