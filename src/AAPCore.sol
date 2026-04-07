@@ -6,7 +6,7 @@ import {MockERC8183} from "./MockERC8183.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-/// @title AAPCore — Minimal reference implementation of ERC-1632 Agent Assurance Protocol
+/// @title AAPCore — Minimal reference implementation of ERC-8210 Agent Assurance Protocol
 contract AAPCore is IAAP {
     using SafeERC20 for IERC20;
 
@@ -16,6 +16,7 @@ contract AAPCore is IAAP {
 
     IERC20 public immutable settlementAsset;
     MockERC8183 public immutable erc8183;
+    address public immutable owner;
 
     // ─────────────────────────────────────────────────────────────────
     // State
@@ -30,6 +31,9 @@ contract AAPCore is IAAP {
     mapping(address => uint256) private _assuranceNonce;
     uint256 private _claimNonce;
 
+    // Evidence hash storage: claimId => keccak256(evidence)
+    mapping(bytes32 => bytes32) public evidenceHashes;
+
     // ─────────────────────────────────────────────────────────────────
     // Constructor
     // ─────────────────────────────────────────────────────────────────
@@ -38,6 +42,7 @@ contract AAPCore is IAAP {
         require(_settlementAsset != address(0), "AAP: zero asset");
         require(_erc8183 != address(0), "AAP: zero erc8183");
         require(_initialResolver != address(0), "AAP: zero resolver");
+        owner = msg.sender;
         settlementAsset = IERC20(_settlementAsset);
         erc8183 = MockERC8183(_erc8183);
         _resolvers[_initialResolver] = true;
@@ -46,6 +51,11 @@ contract AAPCore is IAAP {
     // ─────────────────────────────────────────────────────────────────
     // Modifiers
     // ─────────────────────────────────────────────────────────────────
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "AAP: not owner");
+        _;
+    }
 
     modifier onlyResolver() {
         require(_resolvers[msg.sender], "AAP: caller is not a resolver");
@@ -56,11 +66,14 @@ contract AAPCore is IAAP {
     // Resolver management (minimal, no governance)
     // ─────────────────────────────────────────────────────────────────
 
-    function addResolver(address resolver) external {
-        // In production this should be access-controlled (owner/DAO).
-        // For the reference implementation we keep it open so tests can set up resolvers freely.
+    function addResolver(address resolver) external onlyOwner {
         require(resolver != address(0), "AAP: zero resolver");
         _resolvers[resolver] = true;
+    }
+
+    function removeResolver(address resolver) external onlyOwner {
+        require(resolver != address(0), "AAP: zero resolver");
+        _resolvers[resolver] = false;
     }
 
     function isResolver(address resolver) external view returns (bool) {
@@ -226,7 +239,7 @@ contract AAPCore is IAAP {
     function fileClaim(
         bytes32 assuranceId,
         uint256 requestedAmount,
-        bytes calldata /*evidence*/
+        bytes calldata evidence
     ) external override returns (bytes32 claimId) {
         JobAssurance storage ja = _assurances[assuranceId];
         require(ja.state == AssuranceState.Active, "AAP: assurance not Active");
@@ -249,6 +262,9 @@ contract AAPCore is IAAP {
             assuranceId,
             _claimNonce++
         ));
+
+        // Store evidence hash on-chain for auditability
+        evidenceHashes[claimId] = keccak256(evidence);
 
         // Transition: JobAssurance Active → Claimed
         ja.state   = AssuranceState.Claimed;
@@ -290,6 +306,7 @@ contract AAPCore is IAAP {
         if (approved) {
             require(approvedAmount > 0, "AAP: approvedAmount must be > 0");
             require(approvedAmount <= claim.requestedAmount, "AAP: approvedAmount exceeds requested");
+            require(approvedAmount <= ja.committedAmount, "AAP: approvedAmount exceeds committed");
             claim.approvedAmount = approvedAmount;
             claim.state = ClaimState.Approved;
             // JobAssurance stays Claimed until payout()

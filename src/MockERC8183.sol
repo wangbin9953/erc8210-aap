@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 /// @title MockERC8183
 /// @notice Minimal mock of an ERC-8183 Job contract for IAAP integration testing.
 ///         Exposes job state and evaluator info so AAPCore can verify claim eligibility.
+/// @dev FOR TESTING ONLY. All state transitions are permissionless by design.
+///      DO NOT DEPLOY TO MAINNET OR ANY PRODUCTION ENVIRONMENT.
 contract MockERC8183 {
 
     enum JobState {
