@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 pragma solidity ^0.8.20;
 
-/// @title IAAP — Agent Assurance Protocol Core Interface (ERC-1632)
+/// @title IAAP — Agent Assurance Protocol Core Interface (ERC-8210)
 interface IAAP {
 
     // ─────────────────────────────────────────────────────────────────
