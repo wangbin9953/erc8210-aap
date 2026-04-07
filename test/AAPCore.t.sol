@@ -411,4 +411,39 @@ contract AAPCoreTest is Test {
         aap.payout(claimId);
         _assertInvariant();
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 15: resolutionReasonHashes correctly stored for approved and denied claims
+    // ─────────────────────────────────────────────────────────────────
+    function test_15_ResolutionReasonHashes() public {
+        bytes memory reasonApproved = bytes("ipfs://QmApprovedReason");
+        bytes memory reasonDenied   = bytes("ipfs://QmDeniedReason");
+
+        // --- Approved branch ---
+        bytes32 assuranceId1 = _depositAndCommit();
+        jobs.rejectJob(JOB_ID);
+        bytes32 claimId1 = _fileClaim(assuranceId1);
+
+        vm.prank(resolver);
+        aap.resolveClaim(claimId1, true, COMMIT, reasonApproved);
+
+        assertEq(aap.resolutionReasonHashes(claimId1), keccak256(reasonApproved));
+
+        // --- Denied branch: need a new job and assurance ---
+        bytes32 jobId2 = keccak256("job-002");
+        jobs.createJob(jobId2, beneficiary, agent, evaluator);
+
+        // Deposit more and commit to job2
+        vm.prank(agent);
+        bytes32 assuranceId2 = aap.commitToJob(jobId2, IAAP.CoverageType.JobFailure, beneficiary, COMMIT, EXPIRY);
+
+        jobs.rejectJob(jobId2);
+        vm.prank(beneficiary);
+        bytes32 claimId2 = aap.fileClaim(assuranceId2, COMMIT, "");
+
+        vm.prank(resolver);
+        aap.resolveClaim(claimId2, false, 0, reasonDenied);
+
+        assertEq(aap.resolutionReasonHashes(claimId2), keccak256(reasonDenied));
+    }
 }
