@@ -15,6 +15,9 @@ interface IAAP {
         JobFailure,        // Provider non-performance; Job reached rejected/expired terminal state
         EvaluatorDispute,  // Evaluator decision challenged
         SettlementDefault, // Fund release failure after valid completion, attributable to Assured Agent
+        RoleCollusion,     // v2 改动 10B: role-collusion path (Provider/Evaluator/Resolver) attested
+                           // post-completion via external independence-signal layer; complements
+                           // EvaluatorDispute, which covers the pre-completion dispute case.
         AMLFreeze,         // Extension-reserved: AML freeze (optional)
         SlashingLoss       // Extension-reserved: external slashing (optional)
     }
@@ -96,16 +99,26 @@ interface IAAP {
     ///      consumers. This adaptation preserves the canonical interface
     ///      semantics while reducing storage overhead and improving
     ///      indexability for integer-keyed deployments.
+    /// @dev v2 改动 17B: `upstream`, `reasoningCID`, and `slashEvidenceHash`
+    ///      are first-class optional composition metadata fields. Set to
+    ///      `bytes32(0)` when unused. They are first-class (not packed into
+    ///      the opaque `evidence` payload of `fileClaim`) so that:
+    ///        1. Direct slot reads avoid ABI-decode gas on the hot path.
+    ///        2. Indexers can consume them from the `ClaimFiled` event
+    ///           without bespoke decoding.
     struct Claim {
         bytes32    claimId;
         bytes32    assuranceId;
         address    beneficiary;
         uint256    requestedAmount;
-        uint256    approvedAmount;    // 0 if denied
+        uint256    approvedAmount;       // 0 if denied
         ClaimState state;
         uint64     filedAt;
-        uint64     resolvedAt;        // 0 while pending
-        bytes32    reasonHash;        // v2 改动 8: keccak256(reason) at resolution; bytes32(0) while pending
+        uint64     resolvedAt;            // 0 while pending
+        bytes32    reasonHash;            // v2 改动 8: keccak256(reason) at resolution; bytes32(0) while pending
+        bytes32    upstream;              // v2 改动 17B: prior-hop claim/job reference (multi-hop workflows); 0 if unused
+        bytes32    reasoningCID;          // v2 改动 17B: evaluator/verifier reasoning content reference; 0 if unused
+        bytes32    slashEvidenceHash;     // v2 改动 17B: hash of slash record evidence; 0 if unused
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -131,11 +144,19 @@ interface IAAP {
     event AssuranceExpired(bytes32 indexed assuranceId);
 
     // Claim events
+    /// @notice Emitted when a Claim is filed. The first-class composition
+    ///         fields (`upstream`, `reasoningCID`, `slashEvidenceHash`) are
+    ///         carried directly so indexers can subscribe to them without
+    ///         decoding the opaque evidence payload. Any field MAY be
+    ///         `bytes32(0)` if unused. (v2 改动 17B)
     event ClaimFiled(
         bytes32 indexed claimId,
         bytes32 indexed assuranceId,
         address indexed beneficiary,
-        uint256 requestedAmount
+        uint256 requestedAmount,
+        bytes32 upstream,
+        bytes32 reasoningCID,
+        bytes32 slashEvidenceHash
     );
     /// @notice Emitted when a Claim is resolved. The raw `reason` bytes are
     ///         carried in the event for off-chain indexers (IPFS CID,
@@ -196,9 +217,25 @@ interface IAAP {
     // ─────────────────────────────────────────────────────────────────
 
     /// @notice File a Claim against an Active JobAssurance.
+    /// @param assuranceId       The JobAssurance to claim against.
+    /// @param requestedAmount   Amount requested, in settlementAsset units.
+    /// @param upstream          v2 改动 17B: optional prior-hop reference for
+    ///                          multi-hop workflows (Scenario 1). Pass
+    ///                          `bytes32(0)` if unused.
+    /// @param reasoningCID      v2 改动 17B: optional evaluator/verifier
+    ///                          reasoning content reference (Scenario 3).
+    ///                          Pass `bytes32(0)` if unused.
+    /// @param slashEvidenceHash v2 改动 17B: optional hash of an external
+    ///                          slash-record evidence pointer (Scenario 2).
+    ///                          Pass `bytes32(0)` if unused.
+    /// @param evidence          Opaque additional evidence payload (IPFS CID,
+    ///                          multi-attestation envelope identifier, etc.).
     function fileClaim(
         bytes32 assuranceId,
         uint256 requestedAmount,
+        bytes32 upstream,
+        bytes32 reasoningCID,
+        bytes32 slashEvidenceHash,
         bytes calldata evidence
     ) external returns (bytes32 claimId);
 

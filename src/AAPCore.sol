@@ -126,7 +126,8 @@ contract AAPCore is IAAP {
         uint256 amount,
         uint64 expiry
     ) external override returns (bytes32 assuranceId) {
-        require(coverageType <= CoverageType.SettlementDefault, "AAP: unsupported coverage type");
+        // v2 改动 10B: RoleCollusion is now a supported coverage type alongside the original three.
+        require(coverageType <= CoverageType.RoleCollusion, "AAP: unsupported coverage type");
         require(amount > 0, "AAP: amount is 0");
         require(beneficiary != address(0), "AAP: zero beneficiary");
         require(expiry > block.timestamp, "AAP: expiry in the past");
@@ -228,6 +229,9 @@ contract AAPCore is IAAP {
     function fileClaim(
         bytes32 assuranceId,
         uint256 requestedAmount,
+        bytes32 upstream,
+        bytes32 reasoningCID,
+        bytes32 slashEvidenceHash,
         bytes calldata /*evidence*/
     ) external override returns (bytes32 claimId) {
         JobAssurance storage ja = _assurances[assuranceId];
@@ -257,18 +261,29 @@ contract AAPCore is IAAP {
         ja.claimId = claimId;
 
         _claims[claimId] = Claim({
-            claimId:         claimId,
-            assuranceId:     assuranceId,
-            beneficiary:     msg.sender,
-            requestedAmount: requestedAmount,
-            approvedAmount:  0,
-            state:           ClaimState.Filed,
-            filedAt:         uint64(block.timestamp),
-            resolvedAt:      0,
-            reasonHash:      bytes32(0)   // v2 改动 8: set at resolveClaim
+            claimId:           claimId,
+            assuranceId:       assuranceId,
+            beneficiary:       msg.sender,
+            requestedAmount:   requestedAmount,
+            approvedAmount:    0,
+            state:             ClaimState.Filed,
+            filedAt:           uint64(block.timestamp),
+            resolvedAt:        0,
+            reasonHash:        bytes32(0),  // v2 改动 8: set at resolveClaim
+            upstream:          upstream,           // v2 改动 17B
+            reasoningCID:      reasoningCID,       // v2 改动 17B
+            slashEvidenceHash: slashEvidenceHash   // v2 改动 17B
         });
 
-        emit ClaimFiled(claimId, assuranceId, msg.sender, requestedAmount);
+        emit ClaimFiled(
+            claimId,
+            assuranceId,
+            msg.sender,
+            requestedAmount,
+            upstream,
+            reasoningCID,
+            slashEvidenceHash
+        );
     }
 
     function resolveClaim(

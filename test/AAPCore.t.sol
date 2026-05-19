@@ -60,7 +60,8 @@ contract AAPCoreTest is Test {
 
     function _fileClaim(bytes32 assuranceId) internal returns (bytes32 claimId) {
         vm.prank(beneficiary);
-        claimId = aap.fileClaim(assuranceId, COMMIT, "");
+        // v2 改动 17B: pass zero for the three optional composition fields.
+        claimId = aap.fileClaim(assuranceId, COMMIT, bytes32(0), bytes32(0), bytes32(0), "");
     }
 
     function _assertInvariant() internal view {
@@ -159,7 +160,7 @@ contract AAPCoreTest is Test {
         // Second fileClaim against same JobAssurance MUST revert
         vm.prank(beneficiary);
         vm.expectRevert("AAP: claim already filed");
-        aap.fileClaim(assuranceId, COMMIT, "");
+        aap.fileClaim(assuranceId, COMMIT, bytes32(0), bytes32(0), bytes32(0), "");
 
         // New commitToJob for same (jobId, coverageType) MUST revert while prior is Active.
         // Since job is already Rejected, adverse-selection check fires first (v2 改动 5 custom error).
@@ -273,7 +274,7 @@ contract AAPCoreTest is Test {
         // Assurance is now Claimed, not Active → second fileClaim MUST revert
         vm.prank(beneficiary);
         vm.expectRevert("AAP: assurance not Active");
-        aap.fileClaim(assuranceId, COMMIT, "");
+        aap.fileClaim(assuranceId, COMMIT, bytes32(0), bytes32(0), bytes32(0), "");
 
         // Claim is Filed, not Approved → payout MUST revert
         vm.expectRevert("AAP: claim not Approved");
@@ -290,7 +291,7 @@ contract AAPCoreTest is Test {
 
         vm.prank(beneficiary);
         vm.expectRevert("AAP: eligibility condition not met");
-        aap.fileClaim(assuranceId, COMMIT, "");
+        aap.fileClaim(assuranceId, COMMIT, bytes32(0), bytes32(0), bytes32(0), "");
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -338,7 +339,7 @@ contract AAPCoreTest is Test {
         // requestedAmount == 0 → revert
         vm.prank(beneficiary);
         vm.expectRevert("AAP: requestedAmount is 0");
-        aap.fileClaim(assuranceId, 0, "");
+        aap.fileClaim(assuranceId, 0, bytes32(0), bytes32(0), bytes32(0), "");
 
         // Valid file
         bytes32 claimId = _fileClaim(assuranceId);
@@ -405,7 +406,7 @@ contract AAPCoreTest is Test {
         // Job fails → file claim
         jobs.rejectJob(JOB_ID);
         vm.prank(beneficiary);
-        bytes32 claimId = aap.fileClaim(assuranceId, COMMIT, "");
+        bytes32 claimId = aap.fileClaim(assuranceId, COMMIT, bytes32(0), bytes32(0), bytes32(0), "");
         _assertInvariant();
 
         // Resolve approved
@@ -416,5 +417,76 @@ contract AAPCoreTest is Test {
         // Payout
         aap.payout(claimId);
         _assertInvariant();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 15: RoleCollusion CoverageType (v2 改动 10B)
+    // Provider/Evaluator collusion attested post-completion by an external
+    // independence layer → Beneficiary can file a RoleCollusion claim.
+    // ─────────────────────────────────────────────────────────────────
+    function test_15_RoleCollusionCoverageType() public {
+        _deposit();
+
+        // Commit to a RoleCollusion-typed assurance up front.
+        vm.prank(agent);
+        bytes32 assuranceId = aap.commitToJob(
+            JOB_ID,
+            IAAP.CoverageType.RoleCollusion,
+            beneficiary,
+            COMMIT,
+            EXPIRY
+        );
+
+        // Job completes normally; collusion is only discovered afterwards.
+        jobs.completeJob(JOB_ID);
+
+        // Before the external attestation lands, the claim is not eligible.
+        vm.prank(beneficiary);
+        vm.expectRevert("AAP: eligibility condition not met");
+        aap.fileClaim(assuranceId, COMMIT, bytes32(0), bytes32(0), bytes32(0), "");
+
+        // External independence-signal layer attests collusion.
+        jobs.markRoleCollusion(JOB_ID);
+
+        // Now the Beneficiary can file and the standard claim path proceeds.
+        bytes32 claimId = _fileClaim(assuranceId);
+
+        vm.prank(resolver);
+        aap.resolveClaim(claimId, true, COMMIT, "collusion-attestation-cid");
+
+        aap.payout(claimId);
+
+        IAAP.Claim memory claim = aap.getClaim(claimId);
+        assertEq(uint8(claim.state), uint8(IAAP.ClaimState.Paid));
+        assertEq(claim.reasonHash, keccak256("collusion-attestation-cid"));
+        _assertInvariant();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Test 16: First-class composition fields are stored + indexable
+    // (v2 改动 17B)
+    // ─────────────────────────────────────────────────────────────────
+    function test_16_FirstClassCompositionFields() public {
+        bytes32 assuranceId = _depositAndCommit();
+        jobs.rejectJob(JOB_ID);
+
+        bytes32 upstream         = keccak256("upstream-claim-or-job");
+        bytes32 reasoningCID     = keccak256("ipfs://reasoning");
+        bytes32 slashEvidence    = keccak256("slash-record-hash");
+
+        vm.prank(beneficiary);
+        bytes32 claimId = aap.fileClaim(
+            assuranceId,
+            COMMIT,
+            upstream,
+            reasoningCID,
+            slashEvidence,
+            ""
+        );
+
+        IAAP.Claim memory claim = aap.getClaim(claimId);
+        assertEq(claim.upstream, upstream);
+        assertEq(claim.reasoningCID, reasoningCID);
+        assertEq(claim.slashEvidenceHash, slashEvidence);
     }
 }

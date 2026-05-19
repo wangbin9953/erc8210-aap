@@ -26,8 +26,16 @@ contract MockERC8183 {
 
     mapping(bytes32 => Job) private _jobs;
 
+    /// @dev v2 改动 10B: simulated post-completion role-collusion attestation
+    ///      (in production this signal would come from an external independence
+    ///      layer, not from the ERC-8183 contract itself; the mock carries the
+    ///      flag here only so tests can exercise the RoleCollusion eligibility
+    ///      path end-to-end).
+    mapping(bytes32 => bool) private _roleCollusionAttested;
+
     event JobCreated(bytes32 indexed jobId, address client, address provider, address evaluator);
     event JobStateChanged(bytes32 indexed jobId, JobState newState);
+    event RoleCollusionAttested(bytes32 indexed jobId);
 
     // ─────────────────────────────────────────────────────────────────
     // Write functions (test helpers / simulation)
@@ -80,6 +88,16 @@ contract MockERC8183 {
         emit JobStateChanged(jobId, JobState.SettlementFailed);
     }
 
+    /// @notice v2 改动 10B: mark that a post-completion role-collusion
+    ///         attestation has been delivered for this job. Mock-only helper;
+    ///         in production the attestation is verified externally and an
+    ///         independence-signal layer is the source of truth.
+    function markRoleCollusion(bytes32 jobId) external {
+        require(_jobs[jobId].state == JobState.Completed, "ERC8183: job not Completed");
+        _roleCollusionAttested[jobId] = true;
+        emit RoleCollusionAttested(jobId);
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // Read functions (consumed by AAPCore for eligibility checks)
     // ─────────────────────────────────────────────────────────────────
@@ -102,6 +120,10 @@ contract MockERC8183 {
     }
 
     /// @notice Returns true if the job has reached a claimable terminal state for the given coverage type.
+    /// @dev Coverage type indices match `IAAP.CoverageType` in the v2 draft enum:
+    ///      0 JobFailure / 1 EvaluatorDispute / 2 SettlementDefault /
+    ///      3 RoleCollusion (v2 改动 10B) / 4 AMLFreeze (reserved) /
+    ///      5 SlashingLoss (reserved).
     function isClaimEligible(bytes32 jobId, uint8 coverageType) external view returns (bool) {
         JobState s = _jobs[jobId].state;
         if (coverageType == 0) {
@@ -113,6 +135,9 @@ contract MockERC8183 {
         } else if (coverageType == 2) {
             // SettlementDefault: SettlementFailed
             return s == JobState.SettlementFailed;
+        } else if (coverageType == 3) {
+            // RoleCollusion (v2 改动 10B): post-completion + external collusion attestation
+            return s == JobState.Completed && _roleCollusionAttested[jobId];
         }
         return false;
     }
