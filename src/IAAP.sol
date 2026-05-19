@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: CC0-1.0
 pragma solidity ^0.8.20;
 
-/// @title IAAP — Agent Assurance Protocol Core Interface (ERC-1632)
+/// @title IAAP — Agent Assurance Protocol Core Interface (ERC-8210)
+/// @dev v2 draft: includes 改动 5 (custom errors for commitToJob),
+///      改动 8 (reasonHash storage / raw reason in event),
+///      改动 16 (Integer Job Identifiers adaptation note).
 interface IAAP {
 
     // ─────────────────────────────────────────────────────────────────
@@ -39,6 +42,23 @@ interface IAAP {
     }
 
     // ─────────────────────────────────────────────────────────────────
+    // Custom errors (v2 改动 5) — commitToJob revert reasons
+    // ─────────────────────────────────────────────────────────────────
+
+    /// @notice Available balance is below the requested commitment amount.
+    error InsufficientAvailableAmount(uint256 available, uint256 requested);
+
+    /// @notice An Active or Claimed JobAssurance for the same
+    ///         (jobId, coverageType) already exists for the caller.
+    error DuplicateCommitment(bytes32 jobId, CoverageType coverageType);
+
+    /// @notice The coverage condition is already met on-chain at commitment time.
+    error AdverseSelectionBlocked(bytes32 jobId);
+
+    /// @notice The Assured Agent's account is not in Active status.
+    error AccountNotActive(address agent);
+
+    // ─────────────────────────────────────────────────────────────────
     // Structs
     // ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +85,17 @@ interface IAAP {
         AssuranceState state;
     }
 
+    /// @dev Implementation Note (v2 改动 16, Integer Job Identifiers):
+    ///      For implementations integrating with ERC-8183-style Job registries
+    ///      that use `uint256` as the native Job identifier, the canonical
+    ///      `bytes32 claimId` MAY be derived from `(jobId, claimant)` via:
+    ///          `claimId = keccak256(abi.encode(jobId, claimant))`
+    ///      Implementations MAY declare a local Claim representation keyed by
+    ///      `(uint256 jobId, address claimant)` natively and expose a
+    ///      `getCanonicalClaim(bytes32 claimId)` view for canonical-shape
+    ///      consumers. This adaptation preserves the canonical interface
+    ///      semantics while reducing storage overhead and improving
+    ///      indexability for integer-keyed deployments.
     struct Claim {
         bytes32    claimId;
         bytes32    assuranceId;
@@ -74,6 +105,7 @@ interface IAAP {
         ClaimState state;
         uint64     filedAt;
         uint64     resolvedAt;        // 0 while pending
+        bytes32    reasonHash;        // v2 改动 8: keccak256(reason) at resolution; bytes32(0) while pending
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -105,12 +137,17 @@ interface IAAP {
         address indexed beneficiary,
         uint256 requestedAmount
     );
+    /// @notice Emitted when a Claim is resolved. The raw `reason` bytes are
+    ///         carried in the event for off-chain indexers (IPFS CID,
+    ///         on-chain attestation reference, etc.). Storage holds only
+    ///         `keccak256(reason)` (see Claim.reasonHash). (v2 改动 8)
     event ClaimResolved(
         bytes32 indexed claimId,
         bytes32 indexed assuranceId,
         bool approved,
         uint256 approvedAmount,
-        address indexed resolver
+        address indexed resolver,
+        bytes reason
     );
     event ClaimPaid(
         bytes32 indexed claimId,

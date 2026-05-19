@@ -133,18 +133,20 @@ contract AAPCore is IAAP {
 
         AssuranceAccount storage acct = _accounts[msg.sender];
         require(acct.agent != address(0), "AAP: no account");
-        require(acct.status == AccountStatus.Active, "AAP: account is Paused");
-        require(acct.availableAmount >= amount, "AAP: insufficient available balance");
+        // v2 改动 5: typed custom errors so off-chain orchestrators can branch on reason.
+        if (acct.status != AccountStatus.Active) revert AccountNotActive(msg.sender);
+        if (acct.availableAmount < amount) {
+            revert InsufficientAvailableAmount(acct.availableAmount, amount);
+        }
 
         // Adverse selection check: coverage condition must NOT already be met
-        require(
-            !erc8183.isClaimEligible(jobId, uint8(coverageType)),
-            "AAP: coverage condition already met"
-        );
+        if (erc8183.isClaimEligible(jobId, uint8(coverageType))) {
+            revert AdverseSelectionBlocked(jobId);
+        }
 
         // Duplicate commitment check: no Active or Claimed assurance for same (jobId, coverageType)
         bytes32 dedupKey = keccak256(abi.encodePacked(msg.sender, jobId, coverageType));
-        require(!_activeDedupKeys[dedupKey], "AAP: duplicate commitment");
+        if (_activeDedupKeys[dedupKey]) revert DuplicateCommitment(jobId, coverageType);
 
         // Generate collision-resistant assuranceId
         assuranceId = keccak256(abi.encodePacked(
@@ -262,7 +264,8 @@ contract AAPCore is IAAP {
             approvedAmount:  0,
             state:           ClaimState.Filed,
             filedAt:         uint64(block.timestamp),
-            resolvedAt:      0
+            resolvedAt:      0,
+            reasonHash:      bytes32(0)   // v2 改动 8: set at resolveClaim
         });
 
         emit ClaimFiled(claimId, assuranceId, msg.sender, requestedAmount);
@@ -272,7 +275,7 @@ contract AAPCore is IAAP {
         bytes32 claimId,
         bool approved,
         uint256 approvedAmount,
-        bytes calldata /*reason*/
+        bytes calldata reason
     ) external override onlyResolver {
         Claim storage claim = _claims[claimId];
         require(claim.state == ClaimState.Filed, "AAP: claim not in Filed state");
@@ -286,6 +289,8 @@ contract AAPCore is IAAP {
         }
 
         claim.resolvedAt = uint64(block.timestamp);
+        // v2 改动 8: store keccak256(reason); raw bytes flow via the event for indexers.
+        claim.reasonHash = keccak256(reason);
 
         if (approved) {
             require(approvedAmount > 0, "AAP: approvedAmount must be > 0");
@@ -301,7 +306,7 @@ contract AAPCore is IAAP {
             // claimId intentionally NOT cleared (prevents duplicate filing)
         }
 
-        emit ClaimResolved(claimId, claim.assuranceId, approved, claim.approvedAmount, msg.sender);
+        emit ClaimResolved(claimId, claim.assuranceId, approved, claim.approvedAmount, msg.sender, reason);
     }
 
     function payout(bytes32 claimId) external override {

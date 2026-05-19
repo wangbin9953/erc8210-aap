@@ -162,9 +162,9 @@ contract AAPCoreTest is Test {
         aap.fileClaim(assuranceId, COMMIT, "");
 
         // New commitToJob for same (jobId, coverageType) MUST revert while prior is Active.
-        // Since job is already Rejected, adverse-selection check fires first — both are valid revert reasons.
+        // Since job is already Rejected, adverse-selection check fires first (v2 改动 5 custom error).
         vm.prank(agent);
-        vm.expectRevert("AAP: coverage condition already met");
+        vm.expectRevert(abi.encodeWithSelector(IAAP.AdverseSelectionBlocked.selector, JOB_ID));
         aap.commitToJob(JOB_ID, IAAP.CoverageType.JobFailure, beneficiary, COMMIT, EXPIRY);
 
         _assertInvariant();
@@ -304,7 +304,7 @@ contract AAPCoreTest is Test {
         jobs.rejectJob(JOB_ID);
 
         vm.prank(agent);
-        vm.expectRevert("AAP: coverage condition already met");
+        vm.expectRevert(abi.encodeWithSelector(IAAP.AdverseSelectionBlocked.selector, JOB_ID));
         aap.commitToJob(JOB_ID, IAAP.CoverageType.JobFailure, beneficiary, COMMIT, EXPIRY);
     }
 
@@ -316,7 +316,13 @@ contract AAPCoreTest is Test {
         _depositAndCommit();
 
         vm.prank(agent);
-        vm.expectRevert("AAP: duplicate commitment");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAAP.DuplicateCommitment.selector,
+                JOB_ID,
+                IAAP.CoverageType.JobFailure
+            )
+        );
         aap.commitToJob(JOB_ID, IAAP.CoverageType.JobFailure, beneficiary, COMMIT, EXPIRY);
     }
 
