@@ -19,28 +19,24 @@
 - **位置：** Rationale 段末尾，新增独立小节
 - **类型：** 📝 纯 spec 文本
 - **决策点：** 无（直接撰写）
-- **谁拍：** Jacky + Henry
 - **时机：** v1 merge 之后
 
 ## 改动 2 — 扩展 EvaluatorDispute eligibility
 - **位置：** Specification 段 "Integration with ERC-8183" 小节
 - **类型：** 📝 纯 spec 文本（参考实现的 eligibility 条件由 MockERC8183 驱动，跟改动 2 解耦）
 - **决策点：** 宽限期长度（建议 ≥ 7 天）
-- **谁拍：** Henry
 - **时机：** v1 merge 之后
 
 ## 改动 3 — IRiskHook 独立性检查 use case
 - **位置：** Optional Extensions 段 IRiskHook 小节
 - **类型：** 📝 纯 spec 文本
 - **决策点：** 是否在 spec 里直接 reference `assessIndependence(addrA, addrB)` 形态
-- **谁拍：** Jacky + Henry
 - **时机：** v1 merge 之后
 
 ## 改动 4 — Role Independence Assumption (Security Considerations)
 - **位置：** Security Considerations 段
 - **类型：** 📝 纯 spec 文本
 - **决策点：** 无
-- **谁拍：** Jacky + Henry
 - **时机：** v1 merge 之后
 
 ## 改动 5 — Custom errors for commitToJob
@@ -55,14 +51,12 @@
 - **位置：** Rationale 段
 - **类型：** 📝 纯 spec 文本
 - **决策点：** 无
-- **谁拍：** Jacky + Henry
 - **时机：** v1 merge 之后
 
 ## 改动 7 — totalFunded 措辞修正
 - **位置：** Rationale 段
 - **类型：** 📝 纯 spec 文本（参考实现注释 `IAAP.sol` 早已是 "cumulative net inflow"，无需改）
 - **决策点：** 无
-- **谁拍：** Jacky
 - **时机：** v1 merge 之后
 
 ## 改动 8 — resolveClaim 存 keccak256(reason)
@@ -77,7 +71,6 @@
 - **位置：** Reference Implementation 段或新增 "Composition Patterns" 小节
 - **类型：** 📝 纯 spec 文本
 - **决策点：** 是否点名具体 contributor（spec 正文不点名，致谢段点名）
-- **谁拍：** Jacky + Henry
 - **时机：** v1 merge 之后
 
 ## 改动 10 — 新 CoverageType: RoleCollusion
@@ -107,7 +100,6 @@
   - 方向 A：spec 点名 Douglas 的 insumer-examples#1（带 URL）
   - 方向 B：protocol-neutral 措辞描述模式，不点名（当前倾向）
   - 方向 C：完全不提，留给参考实现 repo 的 Integration Examples
-- **谁拍：** Jacky + Henry，需要先和 Douglas 同步
 - **时机：** v1 merge 之后
 
 ## 改动 13 — 跨供应商独立性 API
@@ -118,7 +110,6 @@
 - **位置：** 改动 1 新增 Inherited Assumptions 章节中
 - **类型：** 📝 纯 spec 文本（protocol-neutral 措辞，不点名 Demsys；具体合约地址进参考实现 repo 的 Integration Examples）
 - **决策点：** 无
-- **谁拍：** Jacky + Henry
 - **时机：** v1 merge 之后
 
 ## 改动 15 — IIndependenceSignal 接口
@@ -131,7 +122,6 @@
 - **待定项（标注在 NatSpec）：**
   1. 与 IRiskHook 的最终组合方式（平行 / 继承 / 组合） — pending Henry
   2. 第 5 类 Behavioral similarity 是否升核心类别 — pending 社区反馈
-- **谁拍：** Henry + 社区 review
 
 ## 改动 16 — Integer Job Identifiers Implementation Note
 - **位置：** `src/IAAP.sol` 的 `Claim` struct NatSpec
