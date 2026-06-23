@@ -29,7 +29,7 @@ evidenceType = keccak256(profile_identifier)
 
 | Identifier | Status | Maintainer | Entry |
 | --- | --- | --- | --- |
-| _(none yet)_ |  |  |  |
+| `verification.v0.3` | candidate | Joe Krausz (TKCollective) | [docs/profiles/verification-v0.3.md](./profiles/verification-v0.3.md) |
 
 ## Profile entry template
 
